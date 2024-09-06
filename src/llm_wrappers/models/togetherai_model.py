@@ -10,13 +10,21 @@ import sys
 sys.path.append("src/")
 from llm_wrappers.models.model_utils import ChatModel, AIMessage, SystemMessage, HumanMessage, BaseMessage
 
+BASE_VS_INSTRUCT_MAPPING = {
+    "meta-llama/Llama-2-70b-hf": 'base',
+    "meta-llama/Llama-2-70b-chat-hf": 'chat',
+    "meta-llama/Meta-Llama-3-70B": "base",
+    "mistralai/Mistral-7B-Instruct-v0.1": "chat",
+    "mistralai/Mistral-7B-v0.1": "base"
+}
 
 @attrs
 class TogetherAIModel(ChatModel):
     model_provider: str = field(default='together_ai')
-    model_name: str = field(default='mistralai/Mixtral-8x7B-Instruct-v0.1')
+    model_name: str = field(default='meta-llama/Meta-Llama-3-70B')
     role_mapping = field(default={'role': 'role', 'content': 'content', 'assistant': 'assistant', 'user': 'user',
                                   'system': 'system'})
+    model_type: str = field(default=None)
 
     @retry(Exception, tries=2, delay=2, backoff=2)
     def _generate(self, data, return_logprobs: bool = False, return_prompt_logprobs: bool = False):
@@ -35,7 +43,14 @@ class TogetherAIModel(ChatModel):
         return processed_response
 
     def _preprocess(self, data):
-        _messages = [m.prepare_for_generation(role_mapping=self.role_mapping) for m in data]
+        model_type = BASE_VS_INSTRUCT_MAPPING.get(self.model_name)
+        if model_type is None:
+            raise NotImplementedError('Make sure that the model is in BASE_VS_INSTRUCT_MAPPING')
+        self.model_type = model_type
+        if model_type == 'chat':
+            _messages = [m.prepare_for_generation(role_mapping=self.role_mapping) for m in data]
+        else:
+            _messages = [m.prepare_for_completion() for m in data]
 
         url = self.api_info["api_base"]
 
@@ -56,6 +71,7 @@ class TogetherAIModel(ChatModel):
 
         try:
             data_ = data.json()
+            print(data_)
             content = data_['choices'][0]['message']['content']
             logprobs = []
             if len(data_['prompt']) > 0:
