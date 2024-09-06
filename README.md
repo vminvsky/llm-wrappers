@@ -30,6 +30,7 @@ response = model([HumanMessage('Hello')])
     "azure": {
         "lab_key": "value3"
     }
-}```
+}
+```
 
 For all the providers have a key and all the keys.
